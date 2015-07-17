@@ -32,7 +32,7 @@ void LoadImageTo( const std::string& filename, ceng::CArray2D< unsigned int >& o
 }
 
 // saves a jpg
-void SaveImageTo( const std::string& filename, ceng::CArray2D< unsigned int >& image_out )
+void SaveImageTo( const std::string& filename, const ceng::CArray2D< unsigned int >& image_out )
 {
 	int quality_factor = 70;
 	int subsampling = jpge::H2V2;
@@ -79,6 +79,16 @@ void SaveImageTo( const std::string& filename, ceng::CArray2D< unsigned int >& i
 
 	delete [] image_data;
 }
+
+void SavePngTo( const std::string& filename, ceng::CArray2D< unsigned int >& image_out )
+{
+	
+	const int bpp = 4;
+
+	int result = stbi_write_png( filename.c_str(), image_out.GetWidth(), image_out.GetHeight(), 4, image_out.GetData().data, image_out.GetWidth() * 4 );
+
+}
+
 
 
 struct IMPL_Surface {
@@ -447,7 +457,7 @@ bool CmprN( int n1, int n2 )
 	if( n1 == n2 ) return true;
 	if( n1 > n2 ) swap( n1, n2 );
 	const int diff = n2 - n1;
-	const int max_allowed = (int) ( ((float)(n1) * 0.98f) );
+	const int max_allowed = (int) ( ((float)(n1) * 0.90f) );
 	if( diff <= max_allowed ) return true;
 	return false;
 }
@@ -664,9 +674,8 @@ ceng::CArray2D< unsigned int > mImage;
 
 int ParseQR_LoadImage( const std::string& filename )
 {
-
 	LoadImageTo( filename, mImage );
-	int work_width = 1024;
+	int work_width = 1500;
 
 	if( mImage.GetWidth() == 0 ) 
 	{
@@ -680,12 +689,20 @@ int ParseQR_LoadImage( const std::string& filename )
 		ResizeImage( mImage, work_width, height );
 	}
 
+	for( int y = 0; y < mImage.GetHeight(); ++y )
+	{
+		for( int x = 0; x < mImage.GetWidth(); ++x )
+		{
+			mImage.At( x, y ) = ( mImage.At( x, y ) & 0x00FFFFFF ) | 0xFF000000;
+		}
+	}
+
 	image_data = mImage.GetData().data;
 
 	return 0;
 }
 
-int ParseQR( const std::string& filename )
+int ParseQR( const std::string& filename, int iteration )
 {
 	// Step 1: Parse a black and white image 
 	// Step 2: Look for markers
@@ -707,14 +724,23 @@ int ParseQR( const std::string& filename )
 	*/
 
 	// check for possible places
-	
-	unsigned char threshold = 128 + 64;
+	unsigned char thresholds[] = { 128, 
+		128 + 64, 128 - 64,
+		128 + 32, 128 - 32, 128 + 64 + 32, 128 - 64 - 32,
+		128 + 16, 128 - 16, 128 + 64 + 16, 128 - 64 - 16, 128 + 64 + 32 + 16, 128 - 64 - 32 - 16 };
+
+
+	unsigned char threshold = thresholds[ iteration ];
+	// threshold = 96;
+	std::cout << "testing treshold: " << (int)threshold << std::endl;
 	ParseBlackAndWhite( (unsigned char*)image_data, mImage.GetWidth(), mImage.GetHeight(), 4, threshold, image );
 
 	std::vector< Vec2 > positions;
 	LookForMarkers( image, positions );
 
-	// WritePng( image, "out_black_n_white.png", positions );
+	std::stringstream ss;
+	ss << "out_black_n_white_" << (int)threshold << ".png";
+	WritePng( image, ss.str(), positions );
 
 	
 	return 1;

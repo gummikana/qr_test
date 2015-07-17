@@ -8,6 +8,7 @@
 #include <utils/math/cstatisticshelper.h>
 #include <utils/vector_utils/vector_utils.h>
 #include <utils/color/ccolor.h>
+#include <utils/math/point_inside.h>
 
 #include "gameplay_utils/game_mouse.h"
 #include "misc_utils/debug_layer.h"
@@ -71,6 +72,19 @@ struct Marker
 
 	types::vector2 aabb_min;
 	types::vector2 aabb_max;
+
+	void UpdateAABB()
+	{
+		aabb_min.Set( FLT_MAX, FLT_MAX );
+		aabb_max.Set( FLT_MIN, FLT_MIN );
+		for( int i = 0; i < corners.length; ++i )
+		{
+			aabb_min.x = ceng::math::Min( aabb_min.x, corners[i].x );
+			aabb_min.y = ceng::math::Min( aabb_min.y, corners[i].y );
+			aabb_max.x = ceng::math::Max( aabb_max.x, corners[i].x );
+			aabb_max.y = ceng::math::Max( aabb_max.y, corners[i].y );
+		}
+	}
 };
 
 types::vector2 FindClosestTo( const ceng::CStaticArray< types::vector2, 4 >& points, const types::vector2& to_what )
@@ -116,26 +130,15 @@ void ExpandCorner( Marker& marker, int corner, float expansion_rate )
 	p += delta_1;
 
 	marker.corners[ corner ] = p;
-
-	marker.aabb_min.x = ceng::math::Min( marker.aabb_min.x, p.x );
-	marker.aabb_min.y = ceng::math::Min( marker.aabb_min.y, p.y );
-	marker.aabb_max.x = ceng::math::Max( marker.aabb_max.x, p.x );
-	marker.aabb_max.y = ceng::math::Max( marker.aabb_max.y, p.y );
+	marker.UpdateAABB();
 }
 
 void SortOutMarkerCorners( Marker& marker )
 {
 	ceng::CStaticArray< types::vector2, 4 > new_corners;
-	types::vector2 aabb_min( FLT_MAX, FLT_MAX );
-	types::vector2 aabb_max( FLT_MIN, FLT_MIN );
-
-	for( int i = 0; i < 4; ++i )
-	{
-		if( marker.corners[i].x < aabb_min.x ) aabb_min.x = marker.corners[i].x;
-		if( marker.corners[i].y < aabb_min.y ) aabb_min.y = marker.corners[i].y;
-		if( marker.corners[i].x > aabb_max.x ) aabb_max.x = marker.corners[i].x;
-		if( marker.corners[i].y > aabb_max.y ) aabb_max.y = marker.corners[i].y;
-	}
+	marker.UpdateAABB();
+	types::vector2 aabb_min = marker.aabb_min;
+	types::vector2 aabb_max = marker.aabb_max;
 
 	new_corners[ C_TOP_LEFT ] = FindClosestTo( marker.corners, types::vector2( aabb_min.x, aabb_min.y ) );
 	new_corners[ C_TOP_RIGHT ] = FindClosestTo( marker.corners, types::vector2( aabb_max.x, aabb_min.y ) );
@@ -245,19 +248,9 @@ const Marker& FindClosestTo( const std::vector< Marker >& markers, const types::
 void FillTheBlanks( ceng::CArray2D< unsigned int >& texture, Marker& marker )
 {
 	// aabb
-	types::vector2 aabb_min( FLT_MAX, FLT_MAX );
-	types::vector2 aabb_max( FLT_MIN, FLT_MIN );
-
-	for( int i = 0; i < marker.corners.length; ++i )
-	{
-		aabb_min.x = ceng::math::Min( marker.corners[i].x, aabb_min.x );
-		aabb_min.y = ceng::math::Min( marker.corners[i].y, aabb_min.y );
-		aabb_max.x = ceng::math::Max( marker.corners[i].x, aabb_max.x );
-		aabb_max.y = ceng::math::Max( marker.corners[i].y, aabb_max.y );
-	}
-
-	marker.aabb_min = aabb_min;
-	marker.aabb_max = aabb_max;
+	marker.UpdateAABB();
+	types::vector2 aabb_min = marker.aabb_min;
+	types::vector2 aabb_max = marker.aabb_max;
 
 	aabb_min -= types::vector2( 3, 3 );
 	aabb_max += types::vector2( 3, 3 );
@@ -604,233 +597,198 @@ void QRTest::Init()
 	mSpriteContainer = new as::Sprite;
 	mDebugLayer.reset( new DebugLayer );
 
-	std::string filename = "test/test_012.png";
+	std::string filename = "test/t15.jpg";
 
-	ParseQR_LoadImage( filename );
+	ParseQR_LoadImage( filename );	
 
-	as::Sprite* sprite = NULL;
+	bool is_good = false;
+
+	for( int iteration = 0; iteration < 12 && is_good == false; ++iteration )
 	{
-		poro::ITexture* poro_texture = Poro()->GetGraphics()->CreateTexture( mImage.GetWidth(), mImage.GetHeight() );
+		ParseQR( filename, iteration );
 
-		sprite = new as::Sprite;
-		sprite->SetTexture( poro_texture );
-		sprite->SetSize( poro_texture->GetWidth(), poro_texture->GetHeight() );
+
+	#if 1
+		// check for once that intersect with other
+		std::vector< LinePair > new_lines;
 		
-		Poro()->GetGraphics()->SetTextureData( poro_texture, (unsigned char*)mImage.GetData().data );
+		using namespace ceng::math;
 
-		mSpriteContainer->addChild( sprite );
-	}
-
-	ParseQR( filename );
-
-	ceng::CArray2D< unsigned int > image_texture;
-	image_texture = mImage;
-	// LoadImageTo( filename, image_texture );	
-
-	poro::ITexture* mTexture = Poro()->GetGraphics()->CreateTexture( (int)sprite->GetSize().x, (int)sprite->GetSize().y );
-	ceng::CArray2D< unsigned int > temp_texture(mTexture->GetWidth(), mTexture->GetHeight());
-
-	poro::ITexture* mTexture2 = Poro()->GetGraphics()->CreateTexture( (int)sprite->GetSize().x, (int)sprite->GetSize().y );
-	ceng::CArray2D< unsigned int > temp_texture2(mTexture2->GetWidth(), mTexture2->GetHeight());
-	// temp_texture2.GetData().data
-
-	/*
-	for( int y = 0; y < temp_texture.GetHeight(); ++y )
-	{
-		for( int x = 0; x < temp_texture.GetWidth(); ++x )
+		// keep x longest
 		{
-			if( image.IsValid( x, y ) && image.At( x, y ) )
-				temp_texture.At( x, y ) = 0xFFFFFFFF;
-		}
-	}*/
-
-	as::Sprite* overlay = new as::Sprite;
-	overlay->SetTexture( mTexture );
-	overlay->SetSize( mTexture->GetWidth(), mTexture->GetHeight() );
-	overlay->SetName( "overlay" );
-
-	mSpriteContainer->addChild( overlay );
-
-	as::Sprite* card_image = new as::Sprite;
-	card_image->SetTexture( mTexture2 );
-	card_image->SetSize( mTexture2->GetWidth(), mTexture2->GetHeight() );
-	card_image->SetName( "card_image" );
-	// card_image->SetBlendMode( 1 );
-
-	mSpriteContainer->addChild( card_image );
-
-#if 1
-	// check for once that intersect with other
-	std::vector< LinePair > new_lines;
-	
-	using namespace ceng::math;
-
-	// keep x longest
-	{
-		float shortest = 0;
-		int how_many = 16;
-		for( std::size_t i = 0; i < mLines.size(); ++i )
-		{
-			float length = Distance( mLines[i].a.a, mLines[i].a.b );
-			if( length > shortest )
+			float shortest = 0;
+			int how_many = 16;
+			for( std::size_t i = 0; i < mLines.size(); ++i )
 			{
-				new_lines.push_back( mLines[i] );
-				
-				if( (int)new_lines.size() > how_many )
+				float length = Distance( mLines[i].a.a, mLines[i].a.b );
+				if( length > shortest )
 				{
-					RemoveShortest( new_lines );
-
-					shortest = FLT_MAX;
-					int shortest_i = -1;
-					for( int i = 0; i < (int)new_lines.size(); ++i )
+					new_lines.push_back( mLines[i] );
+					
+					if( (int)new_lines.size() > how_many )
 					{
-						float l = Distance( new_lines[i].a.a, new_lines[i].a.b );
-						if( l < shortest )
+						RemoveShortest( new_lines );
+
+						shortest = FLT_MAX;
+						int shortest_i = -1;
+						for( int i = 0; i < (int)new_lines.size(); ++i )
 						{
-							shortest_i = i;
-							shortest = l;
+							float l = Distance( new_lines[i].a.a, new_lines[i].a.b );
+							if( l < shortest )
+							{
+								shortest_i = i;
+								shortest = l;
+							}
 						}
 					}
 				}
 			}
+
+			mLines = new_lines;
+			new_lines.clear();
 		}
 
-		mLines = new_lines;
-		new_lines.clear();
-	}
+		// look for 8 same lengthish
+		{
+			const int how_many = 4 * 2 - 1;
+			std::vector< float > line_l( mLines.size() );
+			std::vector< float > sorted_line_l( mLines.size() );
 
-	// look for 8 same lengthish
-	{
-		const int how_many = 4 * 2;
-		std::vector< float > line_l( mLines.size() );
-		std::vector< float > sorted_line_l( mLines.size() );
+			std::vector< float > lowest_ls;
+			float lowest_value = FLT_MAX;
 
-		std::vector< float > lowest_ls;
-		float lowest_value = FLT_MAX;
+			for( std::size_t i = 0; i < mLines.size(); ++i )
+			{
+				float length = Distance( mLines[i].a.a, mLines[i].b.a );
+				if( length == 0 ) 
+					continue;
+				
+				for( std::size_t j = 0; j < mLines.size(); ++j )
+				{
+					float l = Distance( mLines[j].a.a, mLines[j].b.a );
+					float lp = l / length;
+					line_l[j] = abs( 1.f - lp );
+				}
 
+				// check which are the 8 sameish lengths
+				sorted_line_l = line_l;
+				std::sort( sorted_line_l.begin(), sorted_line_l.end() );
+				
+				// check the 8th most different length
+				if( sorted_line_l.size() > how_many && sorted_line_l[ how_many ] < lowest_value )
+				{
+					lowest_value = sorted_line_l[ how_many ];
+					lowest_ls = line_l;
+				}
+			}
+
+			// check if the lowest value is low enough...
+			// now we should have the lowest_value 
+			for( std::size_t i = 0; i < lowest_ls.size(); ++i )
+			{
+				if( lowest_ls[i] <= lowest_value + 0.1f )
+				{
+					new_lines.push_back( mLines[i] );
+				}
+			}
+
+			
+			mLines = new_lines;
+			new_lines.clear();
+		}
+		
 		for( std::size_t i = 0; i < mLines.size(); ++i )
 		{
-			float length = Distance( mLines[i].a.a, mLines[i].b.a );
-			if( length == 0 ) 
-				continue;
-			
-			for( std::size_t j = 0; j < mLines.size(); ++j )
+			LinePair li = mLines[i];
+
+			bool found_a_pair = false;
+			Vec2 result;
+			for( std::size_t j = i + 1; j < mLines.size(); ++j )
 			{
-				float l = Distance( mLines[j].a.a, mLines[j].b.a );
-				float lp = l / length;
-				line_l[j] = abs( 1.f - lp );
+				LinePair lj = mLines[j];
+
+				if( LineIntersection( li.a.a, li.b.a, lj.a.a, lj.b.a, result ) &&
+					LineIntersection( li.a.a, li.b.a, lj.a.b, lj.b.b, result ) &&
+					LineIntersection( li.a.b, li.b.b, lj.a.a, lj.b.a, result ) &&
+					LineIntersection( li.a.b, li.b.b, lj.a.b, lj.b.b, result ) )
+				{
+					// these are fine...
+					AddAsMarker( li, lj );
+
+					found_a_pair = true;
+					new_lines.push_back( lj );
+				}
 			}
 
-			// check which are the 8 sameish lengths
-			sorted_line_l = line_l;
-			std::sort( sorted_line_l.begin(), sorted_line_l.end() );
-			
-			// check the 8th most different length
-			if( sorted_line_l.size() > how_many && sorted_line_l[ how_many ] < lowest_value )
-			{
-				lowest_value = sorted_line_l[ how_many ];
-				lowest_ls = line_l;
-			}
+			if( found_a_pair ) 
+				new_lines.push_back( li );
+
 		}
 
-		// check if the lowest value is low enough...
-		// now we should have the lowest_value 
-		for( std::size_t i = 0; i < lowest_ls.size(); ++i )
-		{
-			if( lowest_ls[i] <= lowest_value + 0.1f )
-			{
-				new_lines.push_back( mLines[i] );
-			}
-		}
-
-		
 		mLines = new_lines;
-		new_lines.clear();
-	}
-	
-	for( std::size_t i = 0; i < mLines.size(); ++i )
-	{
-		LinePair li = mLines[i];
 
-		bool found_a_pair = false;
-		Vec2 result;
-		for( std::size_t j = i + 1; j < mLines.size(); ++j )
+		// now let's look if we have 4 corners
+		if( mMarkers.empty() == false )
 		{
-			LinePair lj = mLines[j];
+			types::vector2 aabb_min( FLT_MAX, FLT_MAX );
+			types::vector2 aabb_max( FLT_MIN, FLT_MIN );
 
-			if( LineIntersection( li.a.a, li.b.a, lj.a.a, lj.b.a, result ) &&
-				LineIntersection( li.a.a, li.b.a, lj.a.b, lj.b.b, result ) &&
-				LineIntersection( li.a.b, li.b.b, lj.a.a, lj.b.a, result ) &&
-				LineIntersection( li.a.b, li.b.b, lj.a.b, lj.b.b, result ) )
+			for( std::size_t i = 0; i < mMarkers.size(); ++i )	
 			{
-				// these are fine...
-				AddAsMarker( li, lj );
-
-				found_a_pair = true;
-				new_lines.push_back( lj );
+				mMarkers[i].UpdateAABB();
+				if( mMarkers[i].center.x < aabb_min.x ) aabb_min.x = mMarkers[i].center.x;
+				if( mMarkers[i].center.y < aabb_min.y ) aabb_min.y = mMarkers[i].center.y;
+				if( mMarkers[i].center.x > aabb_max.x ) aabb_max.x = mMarkers[i].center.x;
+				if( mMarkers[i].center.y > aabb_max.y ) aabb_max.y = mMarkers[i].center.y;
 			}
-		}
 
-		if( found_a_pair ) 
-			new_lines.push_back( li );
-
-	}
-
-	mLines = new_lines;
-
-	// now let's look if we have 4 corners
-	if( mMarkers.empty() == false )
-	{
-		types::vector2 aabb_min( FLT_MAX, FLT_MAX );
-		types::vector2 aabb_max( FLT_MIN, FLT_MIN );
-
-		for( std::size_t i = 0; i < mMarkers.size(); ++i )	
-		{
-			if( mMarkers[i].center.x < aabb_min.x ) aabb_min.x = mMarkers[i].center.x;
-			if( mMarkers[i].center.y < aabb_min.y ) aabb_min.y = mMarkers[i].center.y;
-			if( mMarkers[i].center.x > aabb_max.x ) aabb_max.x = mMarkers[i].center.x;
-			if( mMarkers[i].center.y > aabb_max.y ) aabb_max.y = mMarkers[i].center.y;
-		}
-
-		std::vector< Marker > markers( 4 );
-		markers[C_TOP_LEFT] = FindClosestTo( mMarkers,	types::vector2( aabb_min.x, aabb_min.y ) );
-		markers[C_TOP_RIGHT] = FindClosestTo( mMarkers, types::vector2( aabb_max.x, aabb_min.y ) );
-		markers[C_BOTTOM_RIGHT] = FindClosestTo( mMarkers, types::vector2( aabb_max.x, aabb_max.y ) );
-		markers[C_BOTTOM_LEFT] = FindClosestTo( mMarkers, types::vector2( aabb_min.x, aabb_max.y ) );
-
-		mMarkers = markers;
-		/*
-		center_p.x /= (float)mMarkers.size();
-		center_p.y /= (float)mMarkers.size();
-		*/
-		/*
-		// set everything to 0
-		std::vector< Marker > markers( 4 );
-		markers[C_TOP_LEFT].center.x = FLT_MAX;
-		markers[C_TOP_LEFT].center.y = FLT_MAX;
-		markers[C_TOP_RIGHT].center.x = FLT_MIN;
-		markers[C_TOP_RIGHT].center.y = FLT_MAX;
-		markers[C_TOP_LEFT].center.x = FLT_MAX;
-		markers[C_TOP_LEFT].center.y = FLT_MAX;
-		markers[C_TOP_LEFT].center.x = FLT_MAX;
-		markers[C_TOP_LEFT].center.y = FLT_MAX;
-
-		for( std::size_t i = 0; i < mMarkers.size(); ++i )
-		{
-			if( mMarkers[i].center.x < markers[C_TOP_LEFT].center.x &&
-				mMarkers[i].center.y < markers[C_TOP_LEFT].center.y ) 
-			{
-				markers[C_TOP_LEFT] = mMarkers[i];
-			}
+			std::vector< Marker > markers( 4 );
+			markers[C_TOP_LEFT] = FindClosestTo( mMarkers,	types::vector2( aabb_min.x, aabb_min.y ) );
+			markers[C_TOP_RIGHT] = FindClosestTo( mMarkers, types::vector2( aabb_max.x, aabb_min.y ) );
+			markers[C_BOTTOM_RIGHT] = FindClosestTo( mMarkers, types::vector2( aabb_max.x, aabb_max.y ) );
+			markers[C_BOTTOM_LEFT] = FindClosestTo( mMarkers, types::vector2( aabb_min.x, aabb_max.y ) );
 			
-			if( mMarkers[i].center.x > markers[C_TOP_RIGHT].center.x &&
-				mMarkers[i].center.y < markers[C_TOP_RIGHT].center.y ) 
+			mMarkers = markers;
+		}
+
+		if( mMarkers.size() == 4 )
+		{
+			bool overlaps = false;
+			
+			for( std::size_t i = 0; i < mMarkers.size(); ++i )
 			{
-				markers[C_TOP_RIGHT] = mMarkers[i];
+				for( std::size_t j = i + 1; j < mMarkers.size(); ++j )
+				{
+					if( ceng::math::TestAABBAABBIntersection( 
+						mMarkers[i].aabb_min, mMarkers[i].aabb_max,
+						mMarkers[j].aabb_min, mMarkers[j].aabb_max ) )
+					{
+						overlaps = true;
+					}
+				}
 			}
 
-		}*/
+			if( overlaps == false )
+			{
+				is_good = true;
+				break;
+			}
+			else
+			{
+				std::cout << "found overlaps" << std::endl;
+			}
+		}
 	}
+
+	// -------------- now if we have the marks ------
+
+	/*ceng::CArray2D< unsigned int > image_texture;
+	image_texture = mImage;*/
+	// LoadImageTo( "test/test_012.png", image_texture );	
+
+	ceng::CArray2D< unsigned int > temp_texture(mImage.GetWidth(), mImage.GetHeight());
+	// ceng::CArray2D< unsigned int > temp_texture2(mImage.GetWidth(), mImage.GetHeight());
+
 
 	// Fill the markers
 	for( int y = 0; y < temp_texture.GetHeight(); ++y )
@@ -840,7 +798,7 @@ void QRTest::Init()
 			if(  temp_texture.At( x, y ) == 0 )
 			{
 				types::fcolor color;
-				color.Set32( image_data[ y * temp_texture.GetWidth() + x ] );
+				color.Set32( mImage.At( x, y ) );
 				color.SetA( 0 );
 				temp_texture.At( x, y ) = color.Get32();
 			}
@@ -855,7 +813,7 @@ void QRTest::Init()
 	for( std::size_t i = 0; i < mMarkers.size(); ++i )
 	{
 		Blur( 1.0f, temp_texture, mMarkers[i].aabb_min - types::vector2( 3, 3 ), mMarkers[i].aabb_max + types::vector2( 3, 3 ) );
-		BlitTo( temp_texture, image_texture, 
+		BlitTo( temp_texture, mImage, 
 			(int)mMarkers[i].aabb_min.x - 7,
 			(int)mMarkers[i].aabb_min.y - 7,
 			(int)mMarkers[i].aabb_max.x + 7,
@@ -871,7 +829,7 @@ void QRTest::Init()
 		ceng::CArray2D< unsigned int > card_texture;
 		LoadImageTo( "c13.png", card_texture );
 
-		temp_texture2.SetEverythingTo( 0xFFFFFFFF );
+		temp_texture.SetEverythingTo( 0xFFFFFFFF );
 
 		/*
 		for( int y = 0; y < card_texture.GetHeight(); ++y )
@@ -917,7 +875,7 @@ void QRTest::Init()
 		text_coords[1].Set( (float)card_texture.GetWidth(), 0 );
 		text_coords[2].Set( (float)card_texture.GetWidth(), (float)card_texture.GetHeight() );
 
-		DrawTriangle( card_texture, text_coords, triangle, temp_texture2 );
+		DrawTriangle( card_texture, text_coords, triangle, temp_texture );
 
 
 		triangle[0] = ( mMarkers[C_TOP_LEFT].corners[C_TOP_LEFT] );
@@ -928,12 +886,12 @@ void QRTest::Init()
 		text_coords[1].Set( (float)card_texture.GetWidth(), (float)card_texture.GetHeight() );
 		text_coords[2].Set( 0, (float)card_texture.GetHeight() );
 
-		DrawTriangle( card_texture, text_coords, triangle, temp_texture2 );
+		DrawTriangle( card_texture, text_coords, triangle, temp_texture );
 
 		// Blur( 1.f, temp_texture2, aabb_min - types::vector2( 3, 3 ), aabb_max + types::vector2( 3, 3 ) );
-		GaussBlurr( 1.f, temp_texture2 );
+		GaussBlurr( 1.f, temp_texture );
 
-		BlitMultiply( temp_texture2, image_texture, 
+		BlitMultiply( temp_texture, mImage, 
 			(int)aabb_min.x - 7, 
 			(int)aabb_min.y - 7,
 			(int)aabb_max.x + 7,
@@ -941,12 +899,17 @@ void QRTest::Init()
 	} 
 
 #endif
-	Poro()->GetGraphics()->SetTextureData( mTexture, (unsigned char*)image_texture.GetData().data );
-	// Poro()->GetGraphics()->SetTextureData( mTexture2, (unsigned char*)temp_texture2.GetData().data );
+	
+	ResizeImage( mImage, 800, 600 );
 
-	ResizeImage( image_texture, 640, 480 );
+	SaveImageTo( "test_image.jpg", mImage );
 
-	SaveImageTo( "test_image.jpg", image_texture );
+	// --- graphics for poro ---
+	as::Sprite* sprite = as::LoadSprite( "test_image.jpg" );
+	sprite->SetScale( 1024.f / sprite->GetSize().x, 768.f / sprite->GetSize().y );
+	mSpriteContainer->addChild( sprite );
+	
+
 }
 
 // ----------------------------------------------------------------------------
