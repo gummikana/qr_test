@@ -252,8 +252,15 @@ void FillTheBlanks( ceng::CArray2D< unsigned int >& texture, Marker& marker )
 	types::vector2 aabb_min = marker.aabb_min;
 	types::vector2 aabb_max = marker.aabb_max;
 
-	aabb_min -= types::vector2( 3, 3 );
-	aabb_max += types::vector2( 3, 3 );
+	aabb_min -= types::vector2( 4, 4 );
+	aabb_max += types::vector2( 4, 4 );
+
+	if( aabb_min.x < 0 ) aabb_min.x = 0;
+	if( aabb_min.y < 0 ) aabb_min.y = 0;
+	if( (int)aabb_max.x >= texture.GetWidth() ) aabb_max.x = (float)texture.GetWidth() - 1;
+	if( (int)aabb_max.y >= texture.GetHeight() ) aabb_max.y = (float)texture.GetHeight() - 1;
+
+	const int mask_size = 4;
 
 	unsigned int c = 0xFFFFFFFF;
 	for( int y = (int)aabb_min.y; y <= (int)aabb_max.y; ++y )
@@ -262,21 +269,25 @@ void FillTheBlanks( ceng::CArray2D< unsigned int >& texture, Marker& marker )
 		{
 			if( image.IsValid( x, y ) )
 			{
-				if(
-					image.At( x, y ) == false ||
-					image.At( x - 1, y ) == false ||
-					image.At( x + 1, y ) == false ||
-					image.At( x, y - 1 ) == false ||
-					image.At( x, y + 1 ) == false ||
-					image.At( x - 2, y ) == false ||
-					image.At( x + 2, y ) == false ||
-					image.At( x, y - 2 ) == false ||
-					image.At( x, y + 2 ) == false ||
-					image.At( x - 3, y ) == false ||
-					image.At( x + 3, y ) == false ||
-					image.At( x, y - 3 ) == false ||
-					image.At( x, y + 3 ) == false )
+				bool color_me = false;
+				if( image.At( x, y ) == false )
+					color_me = true;
 
+				for( int iy = -mask_size; iy <= mask_size; ++iy )
+				{
+					for( int ix = -mask_size; ix <= mask_size; ++ix )
+					{
+						if( image.IsValid( x + ix, y + iy ) && image.At( x + ix, y + iy ) == false )
+						{
+							color_me = true;
+							goto GOTOLABEL_FINISHED;
+						}
+					}
+				}
+
+GOTOLABEL_FINISHED:;
+
+				if( color_me )
 				{
 					if( true )
 					{
@@ -306,7 +317,7 @@ void FillTheBlanks( ceng::CArray2D< unsigned int >& texture, Marker& marker )
 }
 
 
-void GaussBlurr( float t, ceng::CArray2D< unsigned int >& imagedata )
+void GaussBlur( float t, ceng::CArray2D< unsigned int >& imagedata, int aabb_min_x, int aabb_min_y, int aabb_max_x, int aabb_max_y )
 {
 	const int GAUSSIAN_RANGE = 2;
 	float radius = t;
@@ -347,10 +358,15 @@ void GaussBlurr( float t, ceng::CArray2D< unsigned int >& imagedata )
 		}
 	}*/
 
+	if( aabb_min_x < 0 ) aabb_min_x = 0;
+	if( aabb_min_y < 0 ) aabb_min_y = 0;
+	if( aabb_max_x >= imagedata.GetWidth() ) aabb_max_x = imagedata.GetWidth() - 1;
+	if( aabb_max_y >= imagedata.GetHeight() ) aabb_max_y = imagedata.GetHeight() - 1;
+
 	// horizontal pass
-	for( int y = 0; y < imagedata.GetHeight(); ++y )
+	for( int y = (int)aabb_min_y; y <= (int)aabb_max_y; ++y )
 	{
-		for( int x = 0; x < imagedata.GetWidth(); ++x )
+		for( int x = (int)aabb_min_x; x <= (int)aabb_max_x; ++x )
 		{
 			// temp_image[ x ][ y ] = 0;
 			types::fcolor color( 0,0,0,0 );
@@ -373,9 +389,9 @@ void GaussBlurr( float t, ceng::CArray2D< unsigned int >& imagedata )
 	}
 
 	// vertical pass
-	for( int y = 0; y < temp_image.GetHeight(); ++y )
+	for( int y = (int)aabb_min_y; y <= (int)aabb_max_y; ++y )
 	{
-		for( int x = 0; x < temp_image.GetWidth(); ++x )
+		for( int x = (int)aabb_min_x; x <= (int)aabb_max_x; ++x )
 		{
 			types::fcolor color( 0,0,0,0 );
 			
@@ -589,24 +605,17 @@ void BlitMultiply( const ceng::CArray2D< unsigned int >& image_source, ceng::CAr
 }
 
 
-void QRTest::Init()
+//============================================================================================
+
+void DoCard( const std::string& input_file, const std::string& card_image, const std::string& output_filename )
 {
-	DefaultApplication::Init();
-	Poro()->GetGraphics()->SetFillColor( poro::GetFColor( 248.f / 255.f, 245.f / 255.f, 236.f / 255.f, 1.f ) );
-
-	mSpriteContainer = new as::Sprite;
-	mDebugLayer.reset( new DebugLayer );
-
-	std::string filename = "test/t15.jpg";
-
-	ParseQR_LoadImage( filename );	
+	ParseQR_LoadImage( input_file );	
 
 	bool is_good = false;
 
 	for( int iteration = 0; iteration < 12 && is_good == false; ++iteration )
 	{
-		ParseQR( filename, iteration );
-
+		ParseQR( input_file, iteration );
 
 	#if 1
 		// check for once that intersect with other
@@ -827,26 +836,9 @@ void QRTest::Init()
 	{
 		// "c8.png"
 		ceng::CArray2D< unsigned int > card_texture;
-		LoadImageTo( "c13.png", card_texture );
+		LoadImageTo( card_image, card_texture );
 
 		temp_texture.SetEverythingTo( 0xFFFFFFFF );
-
-		/*
-		for( int y = 0; y < card_texture.GetHeight(); ++y )
-		{
-			for( int x = 0; x < card_texture.GetWidth(); ++x )
-			{
-				bool test = ( y % 64 < 32 );
-				test ^= ( x % 64 < 32 );
-				
-				if( test )
-					card_texture.At( x, y ) = 0xFF0077FF;
-				else
-					card_texture.At( x, y ) = 0xFF7700FF;
-			}
-		}*/
-
-		// mMarkers[C_TOP_RIGHT].corners[C_TOP_RIGHT] += types::vector2( 50, -33 );
 
 		float rate = 2.f / 10.f;
 		ExpandCorner( mMarkers[C_TOP_LEFT], C_TOP_LEFT, rate );
@@ -889,7 +881,11 @@ void QRTest::Init()
 		DrawTriangle( card_texture, text_coords, triangle, temp_texture );
 
 		// Blur( 1.f, temp_texture2, aabb_min - types::vector2( 3, 3 ), aabb_max + types::vector2( 3, 3 ) );
-		GaussBlurr( 1.f, temp_texture );
+		GaussBlur( 1.3f, temp_texture,
+			(int)aabb_min.x - 10, 
+			(int)aabb_min.y - 10,
+			(int)aabb_max.x + 10,
+			(int)aabb_max.y + 10 );
 
 		BlitMultiply( temp_texture, mImage, 
 			(int)aabb_min.x - 7, 
@@ -902,7 +898,19 @@ void QRTest::Init()
 	
 	ResizeImage( mImage, 800, 600 );
 
-	SaveImageTo( "test_image.jpg", mImage );
+	SaveImageTo( output_filename, mImage );
+}
+
+
+void QRTest::Init()
+{
+	DefaultApplication::Init();
+	Poro()->GetGraphics()->SetFillColor( poro::GetFColor( 248.f / 255.f, 245.f / 255.f, 236.f / 255.f, 1.f ) );
+
+	mSpriteContainer = new as::Sprite;
+	mDebugLayer.reset( new DebugLayer );
+
+	DoCard( "test/t1.jpg", "cards/h12.png", "test_image.jpg" );
 
 	// --- graphics for poro ---
 	as::Sprite* sprite = as::LoadSprite( "test_image.jpg" );
