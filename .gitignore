@@ -26,3 +26,9 @@
 *.exe
 *.out
 *.app
+
+workdir/*.png
+workdir/*.jpg
+workdir/*.psd
+workdir/screenshots/*
+workdir/test/*
