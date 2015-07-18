@@ -6,7 +6,7 @@
 #include <math.h>
 #include <float.h>
 
-#define COMMAND_LINE
+// #define COMMAND_LINE
 #include "external/jpge.h"
 
 #ifdef COMMAND_LINE
@@ -450,8 +450,8 @@ void WritePng( const ceng::CArray2D< bool >& image, const std::string& filename,
 		for( int x = 0; x < image.GetWidth(); ++x )
 		{
 			bool is_marker = false;
-			if( std::find( positions.begin(), positions.end(), Vec2( x, y ) ) != positions.end() )
-				is_marker = true;
+			/*if( std::find( positions.begin(), positions.end(), Vec2( x, y ) ) != positions.end() )
+				is_marker = true;*/
 
 			int i = ( y * image.GetWidth() + x ) * bpp;
 			unsigned char value = image.At( x, y ) ? 255 : 0;
@@ -468,6 +468,12 @@ void WritePng( const ceng::CArray2D< bool >& image, const std::string& filename,
 				data[i+3] = 255;
 			}
 		}
+	}
+	
+	unsigned int* data_32 = (unsigned int*)data;
+	for( std::size_t i = 0; i < positions.size(); ++i )
+	{
+		data_32[ positions[i].y * image.GetWidth() + positions[i].x ] = 0xFF9900FF;
 	}
 
 	int result = stbi_write_png( filename.c_str(), image.GetWidth(), image.GetHeight(), 4, data, image.GetWidth() * 4 );
@@ -635,7 +641,7 @@ void LookForMarkers( const ceng::CArray2D< bool >& image, std::vector< Vec2 >& o
 				int l4 = lengths[ mod( li - 4, (int)lengths.size() ) ];
 				int l5 = lengths[ mod( li - 5, (int)lengths.size() ) ];
 
-				if( CmprN( l1, l2 ) && CmprN( l1 * 3, l3 ) && CmprN( l2, l4 ) && CmprN( l4, l5 ) )
+				if( CmprN( l1, l5 ) && CmprN( l2, l4 ) && l3 > l1 && l3 < (l1+l2+l3+l4) && looking_for )
 				{
 					// found a marker
 					// std::cout << "found a marker at "  << x << ", " << y << std::endl;
@@ -684,7 +690,7 @@ void LookForMarkers( const ceng::CArray2D< bool >& image, std::vector< Vec2 >& o
 				int l4 = lengths[ mod( li - 4, (int)lengths.size() ) ];
 				int l5 = lengths[ mod( li - 5, (int)lengths.size() ) ];
 
-				if( CmprN( l1, l2 ) && CmprN( l1 * 3, l3 ) && CmprN( l2, l4 ) && CmprN( l4, l5 ) )
+				if( CmprN( l1, l5 ) && CmprN( l2, l4 ) && l3 > l1 && l3 < (l1+l2+l3+l4) && looking_for )
 				{
 					// found a marker
 					// std::cout << "found a marker at "  << x << ", " << y << std::endl;
@@ -769,7 +775,8 @@ int ParseQR( const std::string& filename, int iteration )
 	unsigned char thresholds[] = { 128, 
 		128 + 64, 128 - 64,
 		128 + 32, 128 - 32, 128 + 64 + 32, 128 - 64 - 32,
-		128 + 16, 128 - 16, 128 + 64 + 16, 128 - 64 - 16, 128 + 64 + 32 + 16, 128 - 64 - 32 - 16 };
+		128 + 16, 128 - 16, 128 + 64 + 16, 128 - 64 - 16, 128 + 64 + 32 + 16, 128 - 64 - 32 - 16,
+		128 + 64 + 32 + 16 + 8, 128 - 64 - 32 - 16 - 8, 128 + 64 + 32 + 16 + 8 + 4, 128 - 64 - 32 - 16 - 8 - 4 };
 
 
 	unsigned char threshold = thresholds[ iteration ];
@@ -1054,13 +1061,15 @@ GOTOLABEL_FINISHED:;
 						{
 							int pos_x = x + ceng::Random( -5, 5 );
 							int pos_y = (int)( ( ceng::Randomf( 0.f, 1.f ) > iy ) ? aabb_min.y - 2 : aabb_max.y + 2 );
-							c = image_data[ pos_y * image.GetWidth() + pos_x ];
+							if( pos_x >= 0 && pos_x < image.GetWidth() && pos_y >= 0 && pos_y < image.GetHeight() )
+								c = image_data[ pos_y * image.GetWidth() + pos_x ];
 						}
 						else
 						{
 							int pos_x = int( ( ceng::Randomf( 0.f, 1.f ) > ix ) ? aabb_min.x - 2 : aabb_max.x + 2 );
 							int pos_y = y + ceng::Random( -5, 5 );
-							c = image_data[ pos_y * image.GetWidth() + pos_x ];
+							if( pos_x >= 0 && pos_x < image.GetWidth() && pos_y >= 0 && pos_y < image.GetHeight() )
+								c = image_data[ pos_y * image.GetWidth() + pos_x ];
 						}
 					}
 
@@ -1369,7 +1378,7 @@ void DoCard( const std::string& input_file, const std::string& card_image, const
 
 	bool is_good = false;
 
-	for( int iteration = 0; iteration < 12 && is_good == false; ++iteration )
+	for( int iteration = 0; iteration < 17 && is_good == false; ++iteration )
 	{
 		ParseQR( input_file, iteration );
 

@@ -44,7 +44,8 @@ void QRTest::Init()
 	mSpriteContainer = new as::Sprite;
 	mDebugLayer.reset( new DebugLayer );
 
-	DoCard( "test/t1.jpg", "cards/h12.png", "test_image.jpg" );
+	// t11, t14
+	DoCard( "test/t11.jpg", "cards/h12.png", "test_image.jpg" );
 
 	// --- graphics for poro ---
 	as::Sprite* sprite = as::LoadSprite( "test_image.jpg" );
