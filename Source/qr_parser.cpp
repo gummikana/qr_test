@@ -1741,6 +1741,62 @@ void DoCard( const std::string& input_file, const std::string& card_image, const
 			aabb_max.y = ceng::math::Max( aabb_max.y, mMarkers[i].aabb_max.y );
 		}
 
+		types::vector2 center_p(0,0);
+		for( int i = 0; i < 4; ++i )
+			center_p += mMarkers[i].corners[i];
+
+		center_p = (1.f / 4.f) * center_p;
+
+		std::vector< types::vector2 > triangle(3);
+		std::vector< types::vector2 > text_coords(3);
+
+		// top
+		triangle[0] = ( mMarkers[C_TOP_LEFT].corners[C_TOP_LEFT] );
+		triangle[1] = ( mMarkers[C_TOP_RIGHT].corners[C_TOP_RIGHT] );
+		triangle[2] = center_p;
+
+		text_coords[0].Set( 0, 0 );
+		text_coords[1].Set( (float)card_texture.GetWidth(), 0 );
+		text_coords[2].Set( 0.5f * (float)card_texture.GetWidth(), 0.5f * (float)card_texture.GetHeight() );
+
+		DrawTriangle( card_texture, text_coords, triangle, temp_texture );
+
+		// right
+		triangle[0] = ( mMarkers[C_TOP_RIGHT].corners[C_TOP_RIGHT] );
+		triangle[1] = ( mMarkers[C_BOTTOM_RIGHT].corners[C_BOTTOM_RIGHT] );
+		triangle[2] = center_p;
+
+		text_coords[0].Set( (float)card_texture.GetWidth(), 0 );
+		text_coords[1].Set( (float)card_texture.GetWidth(), (float)card_texture.GetHeight() );
+		text_coords[2].Set( 0.5f * (float)card_texture.GetWidth(), 0.5f * (float)card_texture.GetHeight() );
+
+		DrawTriangle( card_texture, text_coords, triangle, temp_texture );
+
+		// bottom
+		triangle[0] = center_p;
+		triangle[1] = ( mMarkers[C_BOTTOM_RIGHT].corners[C_BOTTOM_RIGHT] );
+		triangle[2] = ( mMarkers[C_BOTTOM_LEFT].corners[C_BOTTOM_LEFT] );
+
+		text_coords[0].Set( 0.5f * (float)card_texture.GetWidth(), 0.5f * (float)card_texture.GetHeight() );
+		text_coords[1].Set( (float)card_texture.GetWidth(), (float)card_texture.GetHeight() );
+		text_coords[2].Set( 0, (float)card_texture.GetHeight() );
+
+		DrawTriangle( card_texture, text_coords, triangle, temp_texture );
+
+		// left
+		triangle[0] = center_p;
+		triangle[2] = ( mMarkers[C_BOTTOM_LEFT].corners[C_BOTTOM_LEFT] );
+		triangle[1] = ( mMarkers[C_TOP_LEFT].corners[C_TOP_LEFT] );
+
+		text_coords[0].Set( 0.5f * (float)card_texture.GetWidth(), 0.5f * (float)card_texture.GetHeight() );
+		text_coords[1].Set( 0, (float)card_texture.GetHeight() );
+		text_coords[1].Set( 0, 0 );
+
+		DrawTriangle( card_texture, text_coords, triangle, temp_texture );
+
+
+#if 0
+		// old, wrong perpective
 		std::vector< types::vector2 > triangle(3);
 
 		triangle[0] = ( mMarkers[C_TOP_LEFT].corners[C_TOP_LEFT] );
@@ -1764,7 +1820,7 @@ void DoCard( const std::string& input_file, const std::string& card_image, const
 		text_coords[2].Set( 0, (float)card_texture.GetHeight() );
 
 		DrawTriangle( card_texture, text_coords, triangle, temp_texture );
-
+#endif
 		// Blur( 1.f, temp_texture2, aabb_min - types::vector2( 3, 3 ), aabb_max + types::vector2( 3, 3 ) );
 		GaussBlur( 1.3f, temp_texture,
 			(int)aabb_min.x - 10, 
