@@ -6,7 +6,8 @@
 #include <math.h>
 #include <float.h>
 
-// #define COMMAND_LINE
+#define COMMAND_LINE
+// #define QR_DEBUG
 #include "external/jpge.h"
 
 #ifdef COMMAND_LINE
@@ -17,6 +18,13 @@
 	#undef STB_IMAGE_IMPLEMENTATION
 
 	#include "external/jpge.cpp"
+
+	// #define QR_DEBUG
+	#ifdef QR_DEBUG
+	#define STB_IMAGE_WRITE_IMPLEMENTATION
+	#include "external/stb_image_write.h"
+	#endif
+
 #endif
 
 
@@ -34,11 +42,11 @@
 	#include <poro/external/stb_image.h>
 	// #undef STB_IMAGE_IMPLEMENTATION
 
-	#define QR_DEBUG
+	// #define QR_DEBUG
 	#ifdef QR_DEBUG
-	// #define STB_IMAGE_WRITE_IMPLEMENTATION
 	#include <poro/external/stb_image_write.h>
 	#endif
+
 #endif 
 
 
@@ -114,15 +122,13 @@ void SaveImageTo( const std::string& filename, const ceng::CArray2D< unsigned in
 	delete [] image_data;
 }
 
-/*
+#ifdef QR_DEBUG
 void SavePngTo( const std::string& filename, ceng::CArray2D< unsigned int >& image_out )
 {
-	
 	const int bpp = 4;
-
 	int result = stbi_write_png( filename.c_str(), image_out.GetWidth(), image_out.GetHeight(), 4, image_out.GetData().data, image_out.GetWidth() * 4 );
-
-}*/
+}
+#endif
 
 
 
@@ -397,7 +403,7 @@ int ResizeImage( ceng::CArray2D< unsigned int >& surface, int new_width, int new
 
 struct Vec2
 {
-	Vec2() { }
+	Vec2() : x(0), y(0) { }
 	Vec2( int x, int y ) : x(x), y(y) { }
 
 	bool operator==( const Vec2& other ) const { return ( x == other.x && y == other.y ); }
@@ -436,6 +442,46 @@ float Length( const Vec2& vec2 ) {
 float Distance( const Vec2& a, const Vec2& b ) {
 	return Length( Vec2( a.x - b.x, a.y - b.y ) );
 }
+
+
+enum CORNERS
+{
+	C_TOP_LEFT = 0,
+	C_TOP_RIGHT = 1,
+	C_BOTTOM_RIGHT = 2,
+	C_BOTTOM_LEFT = 3,
+};
+
+struct Marker
+{
+	ceng::CStaticArray< types::vector2, 4 > corners;
+	types::vector2 center;
+
+	types::vector2 aabb_min;
+	types::vector2 aabb_max;
+
+	void UpdateAABB()
+	{
+		aabb_min.Set( FLT_MAX, FLT_MAX );
+		aabb_max.Set( FLT_MIN, FLT_MIN );
+		for( int i = 0; i < corners.length; ++i )
+		{
+			aabb_min.x = ceng::math::Min( aabb_min.x, corners[i].x );
+			aabb_min.y = ceng::math::Min( aabb_min.y, corners[i].y );
+			aabb_max.x = ceng::math::Max( aabb_max.x, corners[i].x );
+			aabb_max.y = ceng::math::Max( aabb_max.y, corners[i].y );
+		}
+	}
+};
+
+//-----------------------------------------------------------------------------
+
+std::vector< LinePair > mLines;
+ceng::CArray2D< bool > image;
+unsigned int* image_data = NULL;
+ceng::CArray2D< unsigned int > mImage;
+std::vector< Marker > mMarkers;
+std::vector< Marker > mDebugMarkers;
 
 //--------------------------
 
@@ -505,7 +551,7 @@ bool CmprN( int n1, int n2 )
 	if( n1 == n2 ) return true;
 	if( n1 > n2 ) swap( n1, n2 );
 	const int diff = n2 - n1;
-	const int max_allowed = (int) ( ((float)(n1) * 0.90f) );
+	const int max_allowed = (int) ( ((float)(n1) * 0.85f) );
 	if( diff <= max_allowed ) return true;
 	return false;
 }
@@ -561,11 +607,14 @@ int FindNextLine( const std::vector< Line >& lines, const std::vector< bool >& u
 	return -1;
 }
 
-std::vector< LinePair > mLines;
 
 void FindLines( const std::vector< Line >& lines )
 {
 	std::vector< bool > used( lines.size() );
+	for( std::size_t i = 0; i < used.size(); ++i ) {
+		used[i] = false;
+	}
+
 	std::vector< LinePair >& results = mLines;
 	for( std::size_t i = 0; i < lines.size(); ++i )
 	{
@@ -641,7 +690,9 @@ void LookForMarkers( const ceng::CArray2D< bool >& image, std::vector< Vec2 >& o
 				int l4 = lengths[ mod( li - 4, (int)lengths.size() ) ];
 				int l5 = lengths[ mod( li - 5, (int)lengths.size() ) ];
 
-				if( CmprN( l1, l5 ) && CmprN( l2, l4 ) && l3 > l1 && l3 < (l1+l2+l3+l4) && looking_for )
+				int total_l = l1+l2+l3+l4+l5;
+
+				if( CmprN( l1, l5 ) && CmprN( l2, l4 ) && l3 > l1 && l3 < (l1+l2+l4+l5) && looking_for )
 				{
 					// found a marker
 					// std::cout << "found a marker at "  << x << ", " << y << std::endl;
@@ -690,7 +741,9 @@ void LookForMarkers( const ceng::CArray2D< bool >& image, std::vector< Vec2 >& o
 				int l4 = lengths[ mod( li - 4, (int)lengths.size() ) ];
 				int l5 = lengths[ mod( li - 5, (int)lengths.size() ) ];
 
-				if( CmprN( l1, l5 ) && CmprN( l2, l4 ) && l3 > l1 && l3 < (l1+l2+l3+l4) && looking_for )
+				int total_l = l1+l2+l3+l4+l5;
+
+				if( CmprN( l1, l5 ) && CmprN( l2, l4 ) && l3 > l1 && l3 < (l1+l2+l4+l5) && looking_for )
 				{
 					// found a marker
 					// std::cout << "found a marker at "  << x << ", " << y << std::endl;
@@ -715,15 +768,13 @@ void LookForMarkers( const ceng::CArray2D< bool >& image, std::vector< Vec2 >& o
 
 }
 
-ceng::CArray2D< bool > image;
-unsigned int* image_data = NULL;
-ceng::CArray2D< unsigned int > mImage;
 
 
 int ParseQR_LoadImage( const std::string& filename )
 {
 	LoadImageTo( filename, mImage );
-	int work_width = 1500;
+	// int work_width = 1555;
+	int work_width = 1481;
 
 	if( mImage.GetWidth() == 0 ) 
 	{
@@ -744,6 +795,10 @@ int ParseQR_LoadImage( const std::string& filename )
 			mImage.At( x, y ) = ( mImage.At( x, y ) & 0x00FFFFFF ) | 0xFF000000;
 		}
 	}
+
+#ifdef QR_DEBUG
+	SavePngTo( "debug_resized.png", mImage ); 
+#endif
 
 	image_data = mImage.GetData().data;
 
@@ -820,35 +875,6 @@ void RemoveShortest( std::vector< LinePair >& line_pairs )
 	}
 }
 
-enum CORNERS
-{
-	C_TOP_LEFT = 0,
-	C_TOP_RIGHT = 1,
-	C_BOTTOM_RIGHT = 2,
-	C_BOTTOM_LEFT = 3,
-};
-
-struct Marker
-{
-	ceng::CStaticArray< types::vector2, 4 > corners;
-	types::vector2 center;
-
-	types::vector2 aabb_min;
-	types::vector2 aabb_max;
-
-	void UpdateAABB()
-	{
-		aabb_min.Set( FLT_MAX, FLT_MAX );
-		aabb_max.Set( FLT_MIN, FLT_MIN );
-		for( int i = 0; i < corners.length; ++i )
-		{
-			aabb_min.x = ceng::math::Min( aabb_min.x, corners[i].x );
-			aabb_min.y = ceng::math::Min( aabb_min.y, corners[i].y );
-			aabb_max.x = ceng::math::Max( aabb_max.x, corners[i].x );
-			aabb_max.y = ceng::math::Max( aabb_max.y, corners[i].y );
-		}
-	}
-};
 
 types::vector2 FindClosestTo( const ceng::CStaticArray< types::vector2, 4 >& points, const types::vector2& to_what )
 {
@@ -911,7 +937,6 @@ void SortOutMarkerCorners( Marker& marker )
 	marker.corners = new_corners;
 }
 
-std::vector< Marker > mMarkers;
 
 void ExtendLine( types::vector2& a, types::vector2& b, float length )
 {
@@ -931,19 +956,19 @@ bool AddAsMarker( const LinePair& l0, const LinePair& l1 )
 
 	vector2 top_start( l0.a.a );
 	vector2 top_end( l0.a.b );
-	ExtendLine( top_start, top_end, 1024.f );
+	ExtendLine( top_start, top_end, 350.f );
 
 	vector2 bottom_start( l0.b.a );
 	vector2 bottom_end( l0.b.b );
-	ExtendLine( bottom_start, bottom_end, 1024.f );
+	ExtendLine( bottom_start, bottom_end, 350.f );
 
 	vector2 left_start( l1.a.a );
 	vector2 left_end( l1.a.b );
-	ExtendLine( left_start, left_end, 1024.f );
+	ExtendLine( left_start, left_end, 350.f );
 
 	vector2 right_start( l1.b.a );
 	vector2 right_end( l1.b.b );
-	ExtendLine( right_start, right_end, 1024.f );
+	ExtendLine( right_start, right_end, 350.f );
 
 	types::vector2 top_center = Lerp( top_start, top_end, 0.5f );
 	types::vector2 bottom_center = Lerp( bottom_start, bottom_end, 0.5f );
@@ -953,31 +978,31 @@ bool AddAsMarker( const LinePair& l0, const LinePair& l1 )
 	// look for the intersection
 	if( LineIntersection( top_start, top_end, left_start, left_end, result.corners[C_TOP_LEFT] ) == false )
 	{
-		std::cout << "Error couldn't find top left for marker..." << std::endl;
+		// std::cout << "Error couldn't find top left for marker..." << std::endl;
 		return false;
 	}
 
 	if( LineIntersection( top_start, top_end, right_start, right_end, result.corners[C_TOP_RIGHT] ) == false )
 	{
-		std::cout << "Error couldn't find top left for marker..." << std::endl;
+		// std::cout << "Error couldn't find top left for marker..." << std::endl;
 		return false;
 	}
 
 	if( LineIntersection( bottom_start, bottom_end, right_start, right_end, result.corners[C_BOTTOM_RIGHT] ) == false )
 	{
-		std::cout << "Error couldn't find top left for marker..." << std::endl;
+		// std::cout << "Error couldn't find top left for marker..." << std::endl;
 		return false;
 	}
 
 	if( LineIntersection( bottom_start, bottom_end, left_start, left_end, result.corners[C_BOTTOM_LEFT] ) == false )
 	{
-		std::cout << "Error couldn't find top left for marker..." << std::endl;
+		// std::cout << "Error couldn't find top left for marker..." << std::endl;
 		return false;
 	}
 	
 	if( LineIntersection( top_center, bottom_center, left_center, right_center, result.center ) == false )
 	{
-		std::cout << "Error couldn't find center for marker" << std::endl;
+		// std::cout << "Error couldn't find center for marker" << std::endl;
 		return false;
 	}
 
@@ -1369,8 +1394,36 @@ void BlitMultiply( const ceng::CArray2D< unsigned int >& image_source, ceng::CAr
 	}
 }
 
+bool IsGoodMarker( const Marker& marker )
+{
+	for( int i = 0; i < marker.corners.length; ++i )
+	{
+		for( int j = i + 1; j < marker.corners.length; ++j )
+		{
+			if( marker.corners[i] == marker.corners[j] )
+				return false;
+		}
+	}
+
+	float l1 = ( marker.corners[C_TOP_LEFT] - marker.corners[C_TOP_RIGHT] ).Length();
+	float l2 = ( marker.corners[C_BOTTOM_LEFT] - marker.corners[C_BOTTOM_RIGHT] ).Length();
+	
+	float diff = abs( l1 - l2 );
+	float diff_p = diff / l1;
+	if( diff_p > 0.2f ) return false;
+
+	l1 = ( marker.corners[C_TOP_LEFT] - marker.corners[C_BOTTOM_LEFT] ).Length();
+	l2 = ( marker.corners[C_TOP_RIGHT] - marker.corners[C_BOTTOM_RIGHT] ).Length();
+	
+	diff = abs( l1 - l2 );
+	diff_p = diff / l1;
+	if( diff_p > 0.2f ) return false;
+
+	return true;
+}
 
 //============================================================================================
+
 
 void DoCard( const std::string& input_file, const std::string& card_image, const std::string& output_filename )
 {
@@ -1378,8 +1431,12 @@ void DoCard( const std::string& input_file, const std::string& card_image, const
 
 	bool is_good = false;
 
-	for( int iteration = 0; iteration < 17 && is_good == false; ++iteration )
+	for( int iteration = 0; iteration < 12 && is_good == false; ++iteration )
 	{
+		mLines.clear();
+		mMarkers.clear();
+		mDebugMarkers.clear();
+
 		ParseQR( input_file, iteration );
 
 	#if 1
@@ -1391,7 +1448,7 @@ void DoCard( const std::string& input_file, const std::string& card_image, const
 		// keep x longest
 		{
 			float shortest = 0;
-			int how_many = 16;
+			int how_many = 48;
 			for( std::size_t i = 0; i < mLines.size(); ++i )
 			{
 				float length = Distance( mLines[i].a.a, mLines[i].a.b );
@@ -1421,6 +1478,50 @@ void DoCard( const std::string& input_file, const std::string& card_image, const
 			mLines = new_lines;
 			new_lines.clear();
 		}
+
+		// keep only the ones that intersect
+		{
+			std::vector< bool > lines_used( mLines.size() );
+			for( std::size_t i = 0; i < lines_used.size(); ++i )
+				lines_used[i] = false;
+
+			for( std::size_t i = 0; i < mLines.size(); ++i )
+			{
+				LinePair li = mLines[i];
+
+				bool found_a_pair = false;
+				Vec2 result;
+				for( std::size_t j = i + 1; j < mLines.size(); ++j )
+				{
+					LinePair lj = mLines[j];
+
+					if( LineIntersection( li.a.a, li.b.a, lj.a.a, lj.b.a, result ) &&
+						LineIntersection( li.a.a, li.b.a, lj.a.b, lj.b.b, result ) &&
+						LineIntersection( li.a.b, li.b.b, lj.a.a, lj.b.a, result ) &&
+						LineIntersection( li.a.b, li.b.b, lj.a.b, lj.b.b, result ) )
+					{
+						// these are fine...
+						// AddAsMarker( li, lj );
+						found_a_pair = true;
+						if( lines_used[j] == false )
+						{
+							lines_used[j] = true;
+							new_lines.push_back( lj );
+						}
+					}
+				}
+
+				if( found_a_pair && lines_used[i] == false )
+				{
+					lines_used[i] = true;
+					new_lines.push_back( li );
+				}
+
+			}
+		}
+
+		mLines = new_lines;
+		new_lines.clear();
 
 		// look for 8 same lengthish
 		{
@@ -1460,7 +1561,7 @@ void DoCard( const std::string& input_file, const std::string& card_image, const
 			// now we should have the lowest_value 
 			for( std::size_t i = 0; i < lowest_ls.size(); ++i )
 			{
-				if( lowest_ls[i] <= lowest_value + 0.1f )
+				if( lowest_ls[i] <= lowest_value + 0.21f )
 				{
 					new_lines.push_back( mLines[i] );
 				}
@@ -1470,7 +1571,8 @@ void DoCard( const std::string& input_file, const std::string& card_image, const
 			mLines = new_lines;
 			new_lines.clear();
 		}
-		
+
+		// look for the markers
 		for( std::size_t i = 0; i < mLines.size(); ++i )
 		{
 			LinePair li = mLines[i];
@@ -1488,7 +1590,6 @@ void DoCard( const std::string& input_file, const std::string& card_image, const
 				{
 					// these are fine...
 					AddAsMarker( li, lj );
-
 					found_a_pair = true;
 					new_lines.push_back( lj );
 				}
@@ -1500,10 +1601,29 @@ void DoCard( const std::string& input_file, const std::string& card_image, const
 		}
 
 		mLines = new_lines;
+		new_lines.clear();
+
+		// remove the wonky markers
+		for( std::size_t i = 0; i < mMarkers.size(); )
+		{
+			if( IsGoodMarker( mMarkers[i] ) )
+			{
+				++i;
+			}
+			else
+			{
+				mMarkers[i] = mMarkers[ mMarkers.size() - 1 ];
+				mMarkers.pop_back();
+			}
+		}
 
 		// now let's look if we have 4 corners
-		if( mMarkers.empty() == false )
+		if( mMarkers.size() >= 4 )
 		{
+			std::cout << "markers: " << mMarkers.size() << std::endl;
+			mDebugMarkers = mMarkers;
+
+
 			types::vector2 aabb_min( FLT_MAX, FLT_MAX );
 			types::vector2 aabb_max( FLT_MIN, FLT_MIN );
 
@@ -1661,7 +1781,9 @@ void DoCard( const std::string& input_file, const std::string& card_image, const
 
 #endif
 	
-	ResizeImage( mImage, 800, 600 );
+	// height
+	int new_height = (int)( ( 800.f / (float)mImage.GetWidth() ) * (float)mImage.GetHeight() + 0.5f );
+	ResizeImage( mImage, 800, new_height );
 
 	SaveImageTo( output_filename, mImage );
 }

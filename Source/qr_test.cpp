@@ -44,8 +44,8 @@ void QRTest::Init()
 	mSpriteContainer = new as::Sprite;
 	mDebugLayer.reset( new DebugLayer );
 
-	// t11, t14
-	DoCard( "test/t11.jpg", "cards/h12.png", "test_image.jpg" );
+	// t4, t5, t12, t7
+	DoCard( "test/t7.jpg", "cards/h12.png", "test_image.jpg" );
 
 	// --- graphics for poro ---
 	as::Sprite* sprite = as::LoadSprite( "test_image.jpg" );
@@ -121,24 +121,29 @@ void QRTest::Draw( poro::IGraphics* graphics )
 #endif
 
 	// 
-	if( config_display_wireframe && mMarkers.empty() == false )
+	if( config_display_wireframe && mDebugMarkers.empty() == false )
 	{
+		// int work_width = 1481;
+
+		float scale = ( 1024.f / 1481.f );
+
 		types::vector2 center_p(0,0);
-		for( std::size_t k = 0; k < mMarkers.size(); ++k )	
+		for( std::size_t k = 0; k < mDebugMarkers.size(); ++k )	
 		{
-			center_p += mMarkers[k].center;
+			center_p += mDebugMarkers[k].center;
 			int j, i;
 			for (j=4-1,i=0; i < 4; j=i++) 
 			{
 				DrawLine( graphics, 
-					( mMarkers[k].corners[i] ),  
-					( mMarkers[k].corners[j] ),
+					scale * ( mDebugMarkers[k].corners[i] ),  
+					scale * ( mDebugMarkers[k].corners[j] ),
 					poro::GetFColor( 0, 1, 0, 0.5f ),
 					NULL );
 			}
 		}
 
 
+		/*
 		center_p.x /= (float)mMarkers.size();
 		center_p.y /= (float)mMarkers.size();
 
@@ -168,6 +173,8 @@ void QRTest::Draw( poro::IGraphics* graphics )
 			( mMarkers[C_TOP_LEFT].corners[C_TOP_LEFT] ),
 			poro::GetFColor( 1, 0, 0, 0.5f ),
 			NULL );
+
+			*/
 	}
 }
 
