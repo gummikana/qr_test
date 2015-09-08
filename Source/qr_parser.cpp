@@ -1040,15 +1040,19 @@ void FillTheBlanks( ceng::CArray2D< unsigned int >& texture, Marker& marker )
 	types::vector2 aabb_min = marker.aabb_min;
 	types::vector2 aabb_max = marker.aabb_max;
 
-	aabb_min -= types::vector2( 4, 4 );
-	aabb_max += types::vector2( 4, 4 );
+	types::vector2 aabb_mask_size = aabb_max - aabb_min;
+	aabb_mask_size.x = ceng::math::Clamp( aabb_mask_size.x * 0.1f, 4.f, 20.f );
+	aabb_mask_size.y = ceng::math::Clamp( aabb_mask_size.y * 0.1f, 4.f, 20.f );
+
+	aabb_min -= aabb_mask_size;
+	aabb_max += aabb_mask_size;
 
 	if( aabb_min.x < 0 ) aabb_min.x = 0;
 	if( aabb_min.y < 0 ) aabb_min.y = 0;
 	if( (int)aabb_max.x >= texture.GetWidth() ) aabb_max.x = (float)texture.GetWidth() - 1;
 	if( (int)aabb_max.y >= texture.GetHeight() ) aabb_max.y = (float)texture.GetHeight() - 1;
 
-	const int mask_size = 4;
+	const int mask_size = (int)( ( aabb_mask_size.x + aabb_mask_size.y ) * 0.5f );
 
 	unsigned int c = 0xFFFFFFFF;
 	for( int y = (int)aabb_min.y; y <= (int)aabb_max.y; ++y )
@@ -1061,14 +1065,17 @@ void FillTheBlanks( ceng::CArray2D< unsigned int >& texture, Marker& marker )
 				if( image.At( x, y ) == false )
 					color_me = true;
 
-				for( int iy = -mask_size; iy <= mask_size; ++iy )
+				if( color_me == false )
 				{
-					for( int ix = -mask_size; ix <= mask_size; ++ix )
+					for( int iy = -mask_size; iy <= mask_size; ++iy )
 					{
-						if( image.IsValid( x + ix, y + iy ) && image.At( x + ix, y + iy ) == false )
+						for( int ix = -mask_size; ix <= mask_size; ++ix )
 						{
-							color_me = true;
-							goto GOTOLABEL_FINISHED;
+							if( image.IsValid( x + ix, y + iy ) && image.At( x + ix, y + iy ) == false )
+							{
+								color_me = true;
+								goto GOTOLABEL_FINISHED;
+							}
 						}
 					}
 				}
@@ -1085,6 +1092,7 @@ GOTOLABEL_FINISHED:;
 						if( ceng::Randomf(0.f, 1.f) < 0.5f )
 						{
 							int pos_x = x + ceng::Random( -5, 5 );
+							pos_x = ceng::math::Clamp( pos_x, (int)aabb_min.x, (int)aabb_max.x );
 							int pos_y = (int)( ( ceng::Randomf( 0.f, 1.f ) > iy ) ? aabb_min.y - 2 : aabb_max.y + 2 );
 							if( pos_x >= 0 && pos_x < image.GetWidth() && pos_y >= 0 && pos_y < image.GetHeight() )
 								c = image_data[ pos_y * image.GetWidth() + pos_x ];
@@ -1093,6 +1101,7 @@ GOTOLABEL_FINISHED:;
 						{
 							int pos_x = int( ( ceng::Randomf( 0.f, 1.f ) > ix ) ? aabb_min.x - 2 : aabb_max.x + 2 );
 							int pos_y = y + ceng::Random( -5, 5 );
+							pos_y = ceng::math::Clamp( pos_y, (int)aabb_min.y, (int)aabb_max.y );
 							if( pos_x >= 0 && pos_x < image.GetWidth() && pos_y >= 0 && pos_y < image.GetHeight() )
 								c = image_data[ pos_y * image.GetWidth() + pos_x ];
 						}
@@ -1706,12 +1715,12 @@ void DoCard( const std::string& input_file, const std::string& card_image, const
 
 	for( std::size_t i = 0; i < mMarkers.size(); ++i )
 	{
-		Blur( 1.0f, temp_texture, mMarkers[i].aabb_min - types::vector2( 3, 3 ), mMarkers[i].aabb_max + types::vector2( 3, 3 ) );
+		Blur( 1.0f, temp_texture, mMarkers[i].aabb_min - types::vector2( 20, 20 ), mMarkers[i].aabb_max + types::vector2( 20, 20 ) );
 		BlitTo( temp_texture, mImage, 
-			(int)mMarkers[i].aabb_min.x - 7,
-			(int)mMarkers[i].aabb_min.y - 7,
-			(int)mMarkers[i].aabb_max.x + 7,
-			(int)mMarkers[i].aabb_max.y + 7 );
+			(int)mMarkers[i].aabb_min.x - 20,
+			(int)mMarkers[i].aabb_min.y - 20,
+			(int)mMarkers[i].aabb_max.x + 20,
+			(int)mMarkers[i].aabb_max.y + 20 );
 	}
 
 	// 
